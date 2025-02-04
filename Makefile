@@ -1,12 +1,13 @@
 PROTOCOL_DIR = /usr/share/wayland-protocols
 SCANNER = wayland-scanner
 CC = clang
+OUT = swo
 #OPTIMIZE_FLAGS = -O3 -ffast-math -flto=full -march=native
 
 all: main
 
 clean:
-	rm main
+	rm swo
 	rm olive.c
 	rm stb_image.h
 	rm -r protocols
@@ -51,7 +52,7 @@ main: protocols assets main.c olive.c stb_image.h \
 	$(CC) main.c protocols/xdg-shell.c protocols/wlr-layer-shell.c protocols/wlr-screencopy.c\
 		-Wall -Wextra -Wno-unused-variable -Wno-missing-braces\
 		-lwayland-client -lm -ltesseract -lleptonica\
-		-ggdb $(OPTIMIZE_FLAGS) -o main
+		-ggdb $(OPTIMIZE_FLAGS) -o $(OUT)
 
 tocr: tocr.c
 	$(CC) tocr.c -ltesseract -lleptonica -o tocr

@@ -4,6 +4,6 @@ assets/
 assets/*
 protocols/
 protocols/*
-main
+swo
 olive.c
 stb_image.h
