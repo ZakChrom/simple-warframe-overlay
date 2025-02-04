@@ -1,0 +1,9 @@
+ignore/
+ignore/*
+assets/
+assets/*
+protocols/
+protocols/*
+main
+olive.c
+stb_image.h
