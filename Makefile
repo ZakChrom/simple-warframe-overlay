@@ -12,6 +12,7 @@ clean:
 	rm stb_image.h
 	rm -r protocols
 	rm -r assets
+	rm -r cache
 
 protocols/xdg-shell.h:
 	$(SCANNER) client-header $(PROTOCOL_DIR)/stable/xdg-shell/xdg-shell.xml protocols/xdg-shell.h
@@ -45,13 +46,16 @@ olive.c:
 stb_image.h:
 	wget -nv -O stb_image.h https://raw.githubusercontent.com/nothings/stb/refs/heads/master/stb_image.h
 
-main: protocols assets main.c olive.c stb_image.h \
+rust/target/release/libjson.a: rust/src/lib.rs
+	cd rust; cargo build -r
+
+main: protocols assets main.c olive.c stb_image.h rust/target/release/libjson.a \
 	protocols/xdg-shell.h protocols/xdg-shell.c\
 	protocols/wlr-layer-shell.h protocols/wlr-layer-shell.c\
 	protocols/wlr-screencopy.h protocols/wlr-screencopy.c
 	$(CC) main.c protocols/xdg-shell.c protocols/wlr-layer-shell.c protocols/wlr-screencopy.c\
 		-Wall -Wextra -Wno-unused-variable -Wno-missing-braces\
-		-lwayland-client -lm -ltesseract -lleptonica\
+		-lwayland-client -lm -ltesseract -lleptonica -lssl -lcrypto rust/target/release/libjson.a \
 		-ggdb $(OPTIMIZE_FLAGS) -o $(OUT)
 
 tocr: tocr.c

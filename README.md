@@ -2,6 +2,9 @@
 ### ⚠️ I AM NOT RESPONSIBLE FOR ANY BANNED ACCOUNTS. USE AT YOUR OWN RISK ⚠️
 ### The overlay does not modify or interact with the game in any way other than screenshotting the screen to get relic info
 
+## Not really simple if it has rust
+### Its not supposed to have rust but i couldnt be bothered to do json and networking in c so i will temporarly use rust
+
 ## Why another overlay? Isnt alecaframe better and less risky to use?
 #### Yes but its terrible to install on linux.
 #### I somehow broke my warframe installation when i tried to install overwolf :staring_cat:

@@ -23,6 +23,13 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+// From rust bcs i am not doing json or networking in c
+// Maybe ill rewrite all this in rust someday
+extern void init_thingy();
+extern float get_avg_price_of_item(const char*);
+extern char* get_item(const char*);
+extern void free_cstring(char*);
+
 static uint32_t WIDTH = 0;
 static uint32_t HEIGHT = 0;
 
@@ -30,13 +37,10 @@ static bool configured = false;
 static bool running = true;
 static float dt = 0.0;
 static uint32_t prev_time = 0;
-static float mover_x = 0;
-static float mover_y = 0;
-static const char* tesseract_text = NULL;
+static const char* tesseract_texts[4] = {0};
+static size_t tesseract_text_count = 0;
 static bool tesseract_done = true;
 static float time_thing = 0;
-
-static void *shm_data = NULL;
 
 static struct wl_shm *shm = NULL;
 static struct wl_compositor *compositor = NULL;
@@ -50,6 +54,8 @@ static struct wl_output* output_thing = NULL; // Display or interface?
 static Olivec_Canvas oc = {0};
 static Olivec_Canvas plat = {0};
 
+static TessBaseAPI* tess_api = NULL;
+
 typedef struct {
     int x;
     int y;
@@ -57,8 +63,11 @@ typedef struct {
     int h;
 } Rect;
 
+#define TESSERACT_INTERVAL 1.0
+//#define DEBUG_MODE
+
 // TODO: Compute these based on screen size and ui scale
-#define SCREENCOPY_RECT  ((Rect){635,  549, 320, 70}) // ((Rect){624, 533, 1293, 101})
+// Also maybe support 3 2 and 1 relics
 #define RELIC_INFO_W 318
 #define RELIC_INFO_H 40
 #define RELIC_INFO_Y 242
@@ -66,6 +75,13 @@ typedef struct {
 #define RELIC2_INFO_RECT ((Rect){958,  RELIC_INFO_Y, RELIC_INFO_W, RELIC_INFO_H})
 #define RELIC3_INFO_RECT ((Rect){1282, RELIC_INFO_Y, RELIC_INFO_W, RELIC_INFO_H})
 #define RELIC4_INFO_RECT ((Rect){1609, RELIC_INFO_Y, RELIC_INFO_W, RELIC_INFO_H})
+
+#define RELIC_SCREENCOPY_H 60
+#define RELIC_SCREENCOPY_Y 549
+#define RELIC1_SCREENCOPY_RECT ((Rect){RELIC1_INFO_RECT.x, RELIC_SCREENCOPY_Y, RELIC_INFO_W, RELIC_SCREENCOPY_H}) // ((Rect){624, 533, 1293, 101})
+#define RELIC2_SCREENCOPY_RECT ((Rect){RELIC2_INFO_RECT.x, RELIC_SCREENCOPY_Y, RELIC_INFO_W, RELIC_SCREENCOPY_H})
+#define RELIC3_SCREENCOPY_RECT ((Rect){RELIC3_INFO_RECT.x, RELIC_SCREENCOPY_Y, RELIC_INFO_W, RELIC_SCREENCOPY_H})
+#define RELIC4_SCREENCOPY_RECT ((Rect){RELIC4_INFO_RECT.x, RELIC_SCREENCOPY_Y, RELIC_INFO_W, RELIC_SCREENCOPY_H})
 
 typedef struct {
     struct wl_buffer* buf;
@@ -79,7 +95,6 @@ typedef struct {
     uint32_t stride;
     uint32_t flags;
     ReturnThing thing;
-    Rect rect;
 } ScreencopyThing;
 
 PIX* argb8888_to_grayscale(uint8_t* pixels, int width, int height) {
@@ -147,18 +162,10 @@ static void screencopy_frame_flags(void* data, struct zwlr_screencopy_frame_v1* 
 }
 
 const char* get_text_from_pix(PIX* img, Rect r) {
-    TessBaseAPI *api = TessBaseAPICreate();
-        if (TessBaseAPIInit2(api, NULL, "eng", OEM_LSTM_ONLY) != 0) {
-            printf("Could not initialize Tesseract.\n");
-            exit(1);
-        }
-        TessBaseAPISetImage2(api, img);
-        TessBaseAPISetRectangle(api, r.x, r.y, r.w, r.h);
-        TessBaseAPISetVariable(api, "tessedit_char_whitelist", "ABCDEFGHIJKLMNOPQRSTUXWYXZabcdefghijklmnopqrstuvwxyz");
-
-        const char* text = TessBaseAPIGetUTF8Text(api);
-    TessBaseAPIDelete(api);
-    return text;
+    TessBaseAPISetImage2(tess_api, img);
+    TessBaseAPISetRectangle(tess_api, r.x, r.y, r.w, r.h);
+    TessBaseAPISetVariable(tess_api, "tessedit_char_whitelist", "abcdefghijklmnopqrstuvwxyz");
+    return TessBaseAPIGetUTF8Text(tess_api);
 }
 
 static void screencopy_frame_ready(void* data, struct zwlr_screencopy_frame_v1* frame, uint32_t tv_sec_hi, uint32_t tv_sec_lo, uint32_t tv_nsec) {
@@ -170,15 +177,25 @@ static void screencopy_frame_ready(void* data, struct zwlr_screencopy_frame_v1* 
     ScreencopyThing* sc = (ScreencopyThing*)data;
     
     // Tesseract wants grayscale ig
-    PIX* screen = argb8888_to_grayscale(sc->thing.data, sc->width, sc->height);
+    PIX* gray = argb8888_to_grayscale(sc->thing.data, sc->width, sc->height);
+    PIX* screen = pixGammaTRC(NULL, gray, 0.8, 0, 255);
+    //screen = pixInvert(NULL, screen);
 
-    if (tesseract_text) TessDeleteText(tesseract_text);
-    tesseract_text = get_text_from_pix(screen, sc->rect);
+    for (size_t i = 0; i < tesseract_text_count; i++) {
+        if (tesseract_texts[i]) TessDeleteText(tesseract_texts[i]);
+    }
+
+    tesseract_text_count = 4;
+    tesseract_texts[0] = get_text_from_pix(screen, RELIC1_SCREENCOPY_RECT);
+    tesseract_texts[1] = get_text_from_pix(screen, RELIC2_SCREENCOPY_RECT);
+    tesseract_texts[2] = get_text_from_pix(screen, RELIC3_SCREENCOPY_RECT);
+    tesseract_texts[3] = get_text_from_pix(screen, RELIC4_SCREENCOPY_RECT);
 
     wl_buffer_destroy(sc->thing.buf);
     munmap(sc->thing.data, sc->width * sc->height * sizeof(uint32_t)); // TODO: Could be not u32
     free(sc);
     pixDestroy(&screen);
+    pixDestroy(&gray);
     tesseract_done = true;
 }
 
@@ -213,29 +230,6 @@ static const struct wl_output_listener output_listener = {
     .scale = noop,
     .name = noop,
     .description = noop
-};
-
-static void pointer_motion(void* data, struct wl_pointer* p, uint32_t time, wl_fixed_t surface_x, wl_fixed_t surface_y) {
-    (void)data;
-    (void)p;
-    (void)time;
-    // Why is it * 256
-    mover_x = ((float)surface_x / 256.0) - 16;
-    mover_y = ((float)surface_y / 256.0) - 16;
-}
-
-static const struct wl_pointer_listener pointer_listener = {
-    .enter = noop,
-    .leave = noop,
-    .motion = pointer_motion,
-    .button = noop,
-    .axis = noop,
-    .frame = noop,
-    .axis_source = noop,
-    .axis_stop = noop,
-    .axis_discrete = noop,
-    .axis_value120 = noop,
-    .axis_relative_direction = noop
 };
 
 // void seat_capabilities(void* data, struct wl_seat* seat, uint32_t c) {
@@ -311,7 +305,6 @@ void do_tesseract_thing() {
     tesseract_done = false;
     struct zwlr_screencopy_frame_v1 *frame = zwlr_screencopy_manager_v1_capture_output(screencopy_manager, 0, output_thing);
     ScreencopyThing* sc = malloc(sizeof(ScreencopyThing));
-    sc->rect = SCREENCOPY_RECT;
     zwlr_screencopy_frame_v1_add_listener(frame, &screencopy_frame_listener, sc);
 }
 
@@ -340,20 +333,33 @@ void draw() {
     time_thing += dt;
     olivec_fill(oc, 0x00000000);
 
-    if (tesseract_done && time_thing >= 1.0) {
+    if (tesseract_done && time_thing >= TESSERACT_INTERVAL) {
         time_thing = 0.0;
         do_tesseract_thing();
     }
 
-    if (tesseract_text != NULL) {
-        olivec_text(oc, tesseract_text, 0, 0, olivec_default_font, 3, 0xffffffff);
+    for (size_t i = 0; i < tesseract_text_count; i++) {
+        if (tesseract_texts[i]) {
+            char* item = get_item(tesseract_texts[i]);
+            if (item) {
+                olivec_text(oc, item, 0, ((OLIVEC_DEFAULT_FONT_HEIGHT * 3) + 5) * i, olivec_default_font, 3, 0xffffffff);
+                free_cstring(item);
+            } else {
+                olivec_text(oc, "fail", 0, ((OLIVEC_DEFAULT_FONT_HEIGHT * 3) + 5) * i, olivec_default_font, 3, 0xffffffff);
+            }
+        }
     }
 
 #ifdef DEBUG_MODE
-    olivec_rect(oc, RELIC1_INFO_RECT.x, RELIC1_INFO_RECT.y, RELIC1_INFO_RECT.w, RELIC1_INFO_RECT.h, 0xffff0000);
-    olivec_rect(oc, RELIC2_INFO_RECT.x, RELIC2_INFO_RECT.y, RELIC2_INFO_RECT.w, RELIC2_INFO_RECT.h, 0xff00ff00);
-    olivec_rect(oc, RELIC3_INFO_RECT.x, RELIC3_INFO_RECT.y, RELIC3_INFO_RECT.w, RELIC3_INFO_RECT.h, 0xff0000ff);
-    olivec_rect(oc, RELIC4_INFO_RECT.x, RELIC4_INFO_RECT.y, RELIC4_INFO_RECT.w, RELIC4_INFO_RECT.h, 0xffff00ff);
+    olivec_rect(oc, RELIC1_INFO_RECT.x, RELIC1_INFO_RECT.y, RELIC1_INFO_RECT.w, RELIC1_INFO_RECT.h, 0xa0ff0000);
+    olivec_rect(oc, RELIC2_INFO_RECT.x, RELIC2_INFO_RECT.y, RELIC2_INFO_RECT.w, RELIC2_INFO_RECT.h, 0xa000ff00);
+    olivec_rect(oc, RELIC3_INFO_RECT.x, RELIC3_INFO_RECT.y, RELIC3_INFO_RECT.w, RELIC3_INFO_RECT.h, 0xa00000ff);
+    olivec_rect(oc, RELIC4_INFO_RECT.x, RELIC4_INFO_RECT.y, RELIC4_INFO_RECT.w, RELIC4_INFO_RECT.h, 0xa0ff00ff);
+
+    olivec_rect(oc, RELIC1_SCREENCOPY_RECT.x, RELIC1_SCREENCOPY_RECT.y, RELIC1_SCREENCOPY_RECT.w, RELIC1_SCREENCOPY_RECT.h, 0xa0ff0000);
+    olivec_rect(oc, RELIC2_SCREENCOPY_RECT.x, RELIC2_SCREENCOPY_RECT.y, RELIC2_SCREENCOPY_RECT.w, RELIC2_SCREENCOPY_RECT.h, 0xa000ff00);
+    olivec_rect(oc, RELIC3_SCREENCOPY_RECT.x, RELIC3_SCREENCOPY_RECT.y, RELIC3_SCREENCOPY_RECT.w, RELIC3_SCREENCOPY_RECT.h, 0xa00000ff);
+    olivec_rect(oc, RELIC4_SCREENCOPY_RECT.x, RELIC4_SCREENCOPY_RECT.y, RELIC4_SCREENCOPY_RECT.w, RELIC4_SCREENCOPY_RECT.h, 0xa0ff00ff);
 #endif // DEBUG_MODE
 
     if (plat.pixels == NULL) {
@@ -361,11 +367,16 @@ void draw() {
     }
 
     Rect rects[] = {RELIC1_INFO_RECT, RELIC2_INFO_RECT, RELIC3_INFO_RECT, RELIC4_INFO_RECT};
-    const char* texts[] = {"69", "420", "123", "yay"};
-    for (int i = 0; i < 4; i++) {
+    for (size_t i = 0; i < tesseract_text_count; i++) {
+        float avg_price = get_avg_price_of_item(tesseract_texts[i]);
+        if (avg_price < 0.0) {
+            continue;
+        }
         Rect r = rects[i];
         olivec_sprite_copy(oc, r.x, r.y, r.h, r.h, plat);
-        olivec_text(oc, texts[i],  r.x + r.h, r.y + (r.h / 2), olivec_default_font, 3, 0xffff00ff);
+        char text[256] = {0};
+        if (tesseract_texts[i]) sprintf(text, "%.2f", avg_price);
+        olivec_text(oc, text, r.x + r.h, r.y + (r.h / 2), olivec_default_font, 3, 0xffffffff);
     }
 
     // Its dumb you have to reattach the buffer but whatever
@@ -394,6 +405,14 @@ static const struct wl_callback_listener frame_listener = {
 int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
+
+    init_thingy();
+
+    tess_api = TessBaseAPICreate();
+    if (TessBaseAPIInit2(tess_api, NULL, "eng", OEM_LSTM_ONLY) != 0) {
+        printf("Could not initialize Tesseract.\n");
+        return 1;
+    }
     struct wl_display *display = wl_display_connect(NULL);
     assert(display);
 
@@ -434,10 +453,9 @@ int main(int argc, char *argv[]) {
     assert(thing.data);
     memset(thing.data, 128, WIDTH * HEIGHT * sizeof(uint32_t));
 
-    shm_data = thing.data;
     buffer = thing.buf;
 
-    oc = olivec_canvas(shm_data, WIDTH, HEIGHT, WIDTH);
+    oc = olivec_canvas(thing.data, WIDTH, HEIGHT, WIDTH);
     wl_surface_attach(surface, buffer, 0, 0);
     wl_surface_commit(surface);
 
@@ -449,6 +467,7 @@ int main(int argc, char *argv[]) {
     wl_surface_destroy(surface);
     wl_buffer_destroy(buffer);
     wl_output_destroy(output_thing);
+    TessBaseAPIDelete(tess_api);
 
     return 0;
 }

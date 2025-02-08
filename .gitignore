@@ -4,6 +4,10 @@ assets/
 assets/*
 protocols/
 protocols/*
+cache/
+cache/*
+rust/target/
+rust/target/*
 swo
 olive.c
 stb_image.h
