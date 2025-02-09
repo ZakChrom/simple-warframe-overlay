@@ -28,6 +28,7 @@
 extern void init_thingy();
 extern float get_avg_price_of_item(const char*);
 extern char* get_item(const char*);
+extern float get_set_price(char*);
 extern void free_cstring(char*);
 
 static uint32_t WIDTH = 0;
@@ -338,18 +339,6 @@ void draw() {
         do_tesseract_thing();
     }
 
-    for (size_t i = 0; i < tesseract_text_count; i++) {
-        if (tesseract_texts[i]) {
-            char* item = get_item(tesseract_texts[i]);
-            if (item) {
-                olivec_text(oc, item, 0, ((OLIVEC_DEFAULT_FONT_HEIGHT * 3) + 5) * i, olivec_default_font, 3, 0xffffffff);
-                free_cstring(item);
-            } else {
-                olivec_text(oc, "fail", 0, ((OLIVEC_DEFAULT_FONT_HEIGHT * 3) + 5) * i, olivec_default_font, 3, 0xffffffff);
-            }
-        }
-    }
-
 #ifdef DEBUG_MODE
     olivec_rect(oc, RELIC1_INFO_RECT.x, RELIC1_INFO_RECT.y, RELIC1_INFO_RECT.w, RELIC1_INFO_RECT.h, 0xa0ff0000);
     olivec_rect(oc, RELIC2_INFO_RECT.x, RELIC2_INFO_RECT.y, RELIC2_INFO_RECT.w, RELIC2_INFO_RECT.h, 0xa000ff00);
@@ -375,8 +364,21 @@ void draw() {
         Rect r = rects[i];
         olivec_sprite_copy(oc, r.x, r.y, r.h, r.h, plat);
         char text[256] = {0};
-        if (tesseract_texts[i]) sprintf(text, "%.2f", avg_price);
-        olivec_text(oc, text, r.x + r.h, r.y + (r.h / 2), olivec_default_font, 3, 0xffffffff);
+        if (tesseract_texts[i]) {
+            char* item = get_item(tesseract_texts[i]);
+            if (item) {
+                olivec_text(oc, item, 0, ((OLIVEC_DEFAULT_FONT_HEIGHT * 3) + 5) * i, olivec_default_font, 3, 0xffffffff);
+                float set_price = get_set_price(item);
+                sprintf(text, "%.2f", set_price);
+                olivec_text(oc, text, r.x + r.h + 5, r.y - (r.h / 2), olivec_default_font, 3, 0xffffffff);
+                free_cstring(item);
+            } else {
+                olivec_text(oc, "fail", 0, ((OLIVEC_DEFAULT_FONT_HEIGHT * 3) + 5) * i, olivec_default_font, 3, 0xffffffff);
+            }
+
+            sprintf(text, "%.2f", avg_price);
+        }
+        olivec_text(oc, text, r.x + r.h + 5, r.y + (r.h / 2), olivec_default_font, 3, 0xffffffff);
     }
 
     // Its dumb you have to reattach the buffer but whatever
@@ -413,6 +415,7 @@ int main(int argc, char *argv[]) {
         printf("Could not initialize Tesseract.\n");
         return 1;
     }
+    
     struct wl_display *display = wl_display_connect(NULL);
     assert(display);
 

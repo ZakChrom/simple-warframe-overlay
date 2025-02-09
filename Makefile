@@ -13,6 +13,7 @@ clean:
 	rm -r protocols
 	rm -r assets
 	rm -r cache
+	cd rust; cargo clean
 
 protocols/xdg-shell.h:
 	$(SCANNER) client-header $(PROTOCOL_DIR)/stable/xdg-shell/xdg-shell.xml protocols/xdg-shell.h

@@ -50,10 +50,36 @@ struct Items {
     payload: ItemsThing
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct SetThing {
+    include: SetThing2
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SetThing2 {
+    item: SetThingItem
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SetThingItem {
+    items_in_set: Vec<SetThingItemItem>
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct SetThingItemItem {
+    url_name: String,
+    mastery_level: usize,
+    ducats: usize
+}
+
 /// (Name, UrlName)
 static mut ITEMS: Vec<(String, String)> = Vec::new();
+/// Tesseract output -> (min, min/url str)
 static mut DIST_CACHE: Option<HashMap<String, (usize, String)>> = None;
+/// url_name -> average price
 static mut AVG_CACHE: Option<HashMap<String, f32>> = None;
+/// url_name -> url_name
+static mut SET_CACHE: Option<HashMap<String, String>> = None;
 
 fn tail(a: &str) -> &str {
     a.split_at(1).1
@@ -105,20 +131,7 @@ fn lev(a: &str, b: &str) -> usize {
 
 #[no_mangle]
 pub unsafe extern "C" fn init_thingy() {
-    let path = "cache/items.json";
-    std::fs::create_dir_all("cache").unwrap();
-    
-    let text = if std::fs::exists(path).unwrap() {
-        std::fs::read_to_string(path).unwrap()
-    } else {
-        println!("Item list not in cache, downloading...");
-        let text = reqwest::blocking::get("https://api.warframe.market/v1/items")
-            .unwrap()
-            .text()
-            .unwrap();
-        std::fs::write("cache/items.json", text.clone());
-        text
-    };
+    let text = fetch_and_cache("https://api.warframe.market/v1/items".to_string(), "items".to_string());
 
     let json = serde_json::from_str::<Items>(&text).unwrap();
     for item in json.payload.items {
@@ -129,10 +142,8 @@ pub unsafe extern "C" fn init_thingy() {
     }
 }
 
-unsafe fn get_thing(item: String) -> (usize, String) {
-    if DIST_CACHE == None {
-        DIST_CACHE = Some(HashMap::new());
-    }
+unsafe fn get_min_str(item: String) -> (usize, String) {
+    if DIST_CACHE == None { DIST_CACHE = Some(HashMap::new()); }
 
     let cache = (&mut *addr_of_mut!(DIST_CACHE)).as_mut().unwrap();
     if let Some(thing) = cache.get(&item) {
@@ -158,7 +169,7 @@ unsafe fn get_thing(item: String) -> (usize, String) {
 pub unsafe extern "C" fn get_item(item: *const c_char) -> *mut c_char {
     let item = CStr::from_ptr(item).to_str().unwrap().to_string().to_lowercase().replace('\n', " ");
     
-    let (min, min_str) = get_thing(item);
+    let (min, min_str) = get_min_str(item);
     if min > 6 {
         return std::ptr::null_mut();
     }
@@ -172,42 +183,54 @@ pub unsafe extern "C" fn free_cstring(item: *mut c_char) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_avg_price_of_item(item: *const c_char) -> f32 {
-    assert!(ITEMS.len() != 0);
-    if AVG_CACHE == None {
-        AVG_CACHE = Some(HashMap::new());
+pub unsafe extern "C" fn get_set_price(item: *mut c_char) -> f32 {
+    let item = CStr::from_ptr(item).to_str().unwrap().to_string();
+    if SET_CACHE == None { SET_CACHE = Some(HashMap::new()); }
+    if AVG_CACHE == None { AVG_CACHE = Some(HashMap::new()); }
+
+    let set_cache = (&mut *addr_of_mut!(SET_CACHE)).as_mut().unwrap();
+    let avg_cache = (&mut *addr_of_mut!(AVG_CACHE)).as_mut().unwrap();
+    let mut set = "".to_string();
+    if let Some(thing) = set_cache.get(&item) {
+        if let Some(avg) = avg_cache.get(thing) {
+            return *avg;
+        }
+        set = thing.clone();
+    } else {
+        let text = fetch_and_cache(format!("https://api.warframe.market/v1/items/{}/dropsources?include=item", item), format!("{}_dropsources", item));
+        let setthing = serde_json::from_str::<SetThing>(&text).unwrap();
+        for thing in &setthing.include.item.items_in_set {
+            if thing.url_name.ends_with("set") {
+                set = thing.url_name.clone();
+                set_cache.insert(item.clone(), thing.url_name.clone());
+            }
+        }
     }
-    let cache = (&mut *addr_of_mut!(AVG_CACHE)).as_mut().unwrap();
 
-    let item = CStr::from_ptr(item).to_str().unwrap().to_string().to_lowercase().replace('\n', " ");
+    let results = get_item_stuff(set.clone());
+    avg_cache.insert(set, results.0 / results.1);
+    (results.0 / results.1)
+}
 
-    if lev(&item, "forma blueprint") < 6 {
-        return -1.0;
-    }
-
-    let (min, mut min_str) = get_thing(item);
-    if min > 6 {
-        return -1.0;
-    }
-
-    if let Some(avg) = cache.get(&min_str) {
-        return *avg;
-    }
-
-    let path = format!("cache/{}.json", min_str);
+pub fn fetch_and_cache(url: String, cache_name: String) -> String {
+    let path = format!("cache/{}.json", cache_name);
     std::fs::create_dir_all("cache").unwrap();
-
-    let text = if std::fs::exists(path.clone()).unwrap() {
+    if std::fs::exists(path.clone()).unwrap() {
         std::fs::read_to_string(path).unwrap()
     } else {
-        println!("{} not in cache, downloading...", min_str);
-        let text = reqwest::blocking::get(format!("https://api.warframe.market/v1/items/{}/statistics", min_str))
+        println!("{} not in cache, downloading...", cache_name);
+        let text = reqwest::blocking::get(url)
             .unwrap()
             .text()
             .unwrap();
         std::fs::write(path, text.clone());
         text
-    };
+    }
+}
+
+pub unsafe fn get_item_stuff(item: String) -> (f32, f32) {
+    let text = fetch_and_cache(format!("https://api.warframe.market/v1/items/{}/statistics", item), item.clone());
+    std::fs::create_dir_all("cache").unwrap();
 
     let stats = serde_json::from_str::<Stats>(&text).unwrap();
 
@@ -218,6 +241,36 @@ pub unsafe extern "C" fn get_avg_price_of_item(item: *const c_char) -> f32 {
         }
     }
 
+    (results.0, results.1)
+}
+
+#[repr(C)]
+struct Price {
+    price: f32,
+    set_price: f32
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_avg_price_of_item(item: *const c_char) -> f32 {
+    if AVG_CACHE == None { AVG_CACHE = Some(HashMap::new()); }
+    let cache = (&mut *addr_of_mut!(AVG_CACHE)).as_mut().unwrap();
+
+    let item = CStr::from_ptr(item).to_str().unwrap().to_string().to_lowercase().replace('\n', " ");
+
+    if lev(&item, "forma blueprint") < 6 {
+        return -1.0;
+    }
+
+    let (min, mut min_str) = get_min_str(item);
+    if min > 6 {
+        return -1.0;
+    }
+
+    if let Some(avg) = cache.get(&min_str) {
+        return *avg;
+    }
+
+    let results = get_item_stuff(min_str.clone());
     cache.insert(min_str, results.0 / results.1);
     results.0 / results.1
 }
