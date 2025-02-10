@@ -25,11 +25,12 @@
 
 // From rust bcs i am not doing json or networking in c
 // Maybe ill rewrite all this in rust someday
+typedef char* RString;
 extern void init_thingy();
-extern float get_avg_price_of_item(const char*);
-extern char* get_item(const char*);
-extern float get_set_price(char*);
-extern void free_cstring(char*);
+extern RString get_item(const char*);
+extern float get_item_price(RString);
+extern float get_set_price(RString);
+extern void free_rstring(RString);
 
 static uint32_t WIDTH = 0;
 static uint32_t HEIGHT = 0;
@@ -357,26 +358,32 @@ void draw() {
 
     Rect rects[] = {RELIC1_INFO_RECT, RELIC2_INFO_RECT, RELIC3_INFO_RECT, RELIC4_INFO_RECT};
     for (size_t i = 0; i < tesseract_text_count; i++) {
-        float avg_price = get_avg_price_of_item(tesseract_texts[i]);
-        if (avg_price < 0.0) {
-            continue;
-        }
-        Rect r = rects[i];
-        olivec_sprite_copy(oc, r.x, r.y, r.h, r.h, plat);
-        char text[256] = {0};
         if (tesseract_texts[i]) {
-            char* item = get_item(tesseract_texts[i]);
+            Rect r = rects[i];
+            char text[256] = {0};
+
+            RString item = get_item(tesseract_texts[i]);
+            
             if (item) {
+                float avg_price = get_item_price(item);
+                if (avg_price < 0.0) {
+                    continue;
+                }
+                
                 olivec_text(oc, item, 0, ((OLIVEC_DEFAULT_FONT_HEIGHT * 3) + 5) * i, olivec_default_font, 3, 0xffffffff);
+                
+                olivec_sprite_copy(oc, r.x, r.y, r.h, r.h, plat);
                 float set_price = get_set_price(item);
                 sprintf(text, "%.2f", set_price);
                 olivec_text(oc, text, r.x + r.h + 5, r.y - (r.h / 2), olivec_default_font, 3, 0xffffffff);
-                free_cstring(item);
+                
+                sprintf(text, "%.2f", avg_price);
+                olivec_text(oc, text, r.x + r.h + 5, r.y + (r.h / 2), olivec_default_font, 3, 0xffffffff);
+
+                free_rstring(item);
             }
 
-            sprintf(text, "%.2f", avg_price);
         }
-        olivec_text(oc, text, r.x + r.h + 5, r.y + (r.h / 2), olivec_default_font, 3, 0xffffffff);
     }
 
     // Its dumb you have to reattach the buffer but whatever
