@@ -68,7 +68,6 @@ struct SetThingItem {
 #[derive(Debug, Clone, Deserialize)]
 struct SetThingItemItem {
     url_name: String,
-    mastery_level: usize,
     ducats: usize
 }
 
@@ -206,6 +205,8 @@ pub unsafe extern "C" fn get_set_price(item: *mut c_char) -> f32 {
             }
         }
     }
+    // Maybe some item doesnt have a set so it wouldnt be put into the cache and would crash elsewhere or keep trying to get the set
+    assert!(set != "");
 
     let results = get_item_stuff(set.clone());
     avg_cache.insert(set, results.0 / results.1);

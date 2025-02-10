@@ -372,8 +372,6 @@ void draw() {
                 sprintf(text, "%.2f", set_price);
                 olivec_text(oc, text, r.x + r.h + 5, r.y - (r.h / 2), olivec_default_font, 3, 0xffffffff);
                 free_cstring(item);
-            } else {
-                olivec_text(oc, "fail", 0, ((OLIVEC_DEFAULT_FONT_HEIGHT * 3) + 5) * i, olivec_default_font, 3, 0xffffffff);
             }
 
             sprintf(text, "%.2f", avg_price);
