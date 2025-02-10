@@ -7,7 +7,6 @@
 
 #include <unistd.h>
 #include <sys/mman.h>
-#include <linux/input-event-codes.h>
 
 #include <wayland-client.h>
 #include <wayland-client-protocol.h>
@@ -369,7 +368,7 @@ void draw() {
                 if (avg_price < 0.0) {
                     continue;
                 }
-                
+
                 olivec_text(oc, item, 0, ((OLIVEC_DEFAULT_FONT_HEIGHT * 3) + 5) * i, olivec_default_font, 3, 0xffffffff);
                 
                 olivec_sprite_copy(oc, r.x, r.y, r.h, r.h, plat);
@@ -467,9 +466,7 @@ int main(int argc, char *argv[]) {
     wl_surface_attach(surface, buffer, 0, 0);
     wl_surface_commit(surface);
 
-    while (wl_display_dispatch(display) != -1 && running) {
-        // This space intentionally left blank
-    }
+    while (wl_display_dispatch(display) != -1 && running) {}
 
     zwlr_layer_shell_v1_destroy(layer_shell);
     wl_surface_destroy(surface);

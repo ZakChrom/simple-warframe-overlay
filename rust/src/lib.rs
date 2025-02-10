@@ -152,7 +152,7 @@ unsafe fn get_min_str(item: String) -> (usize, String) {
     (min, min_str)
 }
 
-pub fn fetch_and_cache(url: String, cache_name: String) -> String {
+fn fetch_and_cache(url: String, cache_name: String) -> String {
     let path = format!("cache/{}.json", cache_name);
     std::fs::create_dir_all("cache").unwrap();
     if std::fs::exists(path.clone()).unwrap() {
