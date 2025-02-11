@@ -190,7 +190,7 @@ pub unsafe extern "C" fn init_thingy() {
     let json = serde_json::from_str::<Items>(&text).unwrap();
     for item in json.payload.items {
         let name = item.item_name.to_lowercase();
-        if name.contains("prime") && !name.starts_with("primed") && !name.ends_with("set") {
+        if name.contains("prime") && !name.starts_with("primed") && !name.ends_with("set") && name != "gotva prime" {
             ITEMS.push((item.item_name, item.url_name));
         }
     }
@@ -238,7 +238,7 @@ pub unsafe extern "C" fn get_set_price(item: *mut c_char) -> f32 {
         }
     }
     // Maybe some item doesnt have a set so it wouldnt be put into the cache and would crash elsewhere or keep trying to get the set
-    assert!(set != "");
+    assert!(set != "", "{} does not have set", item);
 
     let results = get_item_stuff(set.clone());
     avg_cache.insert(set, results.0 / results.1);
