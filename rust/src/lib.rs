@@ -194,6 +194,11 @@ pub unsafe extern "C" fn init_thingy() {
             ITEMS.push((item.item_name, item.url_name));
         }
     }
+    // Will make get_min_str of forma return forma_blueprint which we can check to ignore forma
+    // I could do lev of it every time we try to fetch an item but that wouldnt be cached and i want to do this
+    ITEMS.push(("Forma Blueprint".to_string(), "forma_blueprint".to_string()));
+
+    println!("{:?}", get_min_str("forma blueprint".to_string()));
 }
 
 #[no_mangle]
@@ -216,6 +221,8 @@ pub unsafe extern "C" fn free_rstring(item: *mut c_char) {
 #[no_mangle]
 pub unsafe extern "C" fn get_set_price(item: *mut c_char) -> f32 {
     let item = CStr::from_ptr(item).to_str().unwrap().to_string();
+    if item == "forma_blueprint" { return -1.0; }
+
     if SET_CACHE == None { SET_CACHE = Some(HashMap::new()); }
     if AVG_CACHE == None { AVG_CACHE = Some(HashMap::new()); }
 
@@ -247,15 +254,11 @@ pub unsafe extern "C" fn get_set_price(item: *mut c_char) -> f32 {
 
 #[no_mangle]
 pub unsafe extern "C" fn get_item_price(item: *mut c_char) -> f32 {
+    let item = CStr::from_ptr(item).to_str().unwrap().to_string();
+    if item == "forma_blueprint" { return -1.0; }
+
     if AVG_CACHE == None { AVG_CACHE = Some(HashMap::new()); }
     let avg_cache = (&mut *addr_of_mut!(AVG_CACHE)).as_mut().unwrap();
-
-    let item = CStr::from_ptr(item).to_str().unwrap().to_string();
-
-    // TODO: Cache
-    if lev(&item, "forma blueprint") < 6 {
-        return -1.0;
-    }
 
     if let Some(avg) = avg_cache.get(&item) {
         return *avg;
