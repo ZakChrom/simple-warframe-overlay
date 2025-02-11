@@ -67,8 +67,7 @@ struct SetThingItem {
 
 #[derive(Debug, Clone, Deserialize)]
 struct SetThingItemItem {
-    url_name: String,
-    ducats: usize
+    url_name: String
 }
 
 /// (Name, UrlName)
@@ -202,7 +201,7 @@ pub unsafe extern "C" fn get_item(item: *const c_char) -> *mut c_char {
     let item = CStr::from_ptr(item).to_str().unwrap().to_string().to_lowercase().replace('\n', " ");
     
     let (min, min_str) = get_min_str(item);
-    if min > 6 {
+    if min > 8 {
         return std::ptr::null_mut();
     }
 
