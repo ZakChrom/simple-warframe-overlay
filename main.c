@@ -12,6 +12,7 @@
 #include <wayland-client-protocol.h>
 #include "protocols/wlr-layer-shell.h"
 #include "protocols/wlr-screencopy.h"
+#include "protocols/hyprland-global-shortcuts.h"
 
 #include <tesseract/capi.h>
 #include <leptonica/allheaders.h>
@@ -25,10 +26,17 @@
 // From rust bcs i am not doing json or networking in c
 // Maybe ill rewrite all this in rust someday
 typedef char* RString;
+typedef enum {
+    STATS_CLOSED_48_HOURS = 0b0001,
+    STATS_LIVE_48_HOURS   = 0b0010,
+    STATS_CLOSED_90_DAYS  = 0b0100,
+    STATS_LIVE_90_DAYS    = 0b1000,
+    STATS_ALL             = 0b1111
+} Stats;
 extern void init_thingy();
 extern RString get_item(const char*);
-extern float get_item_price(RString);
-extern float get_set_price(RString);
+extern float get_item_price(RString, Stats);
+extern float get_set_price(RString, Stats);
 extern void free_rstring(RString);
 
 static uint32_t WIDTH = 0;
@@ -47,6 +55,7 @@ static struct wl_shm *shm = NULL;
 static struct wl_compositor *compositor = NULL;
 static struct zwlr_layer_shell_v1 *layer_shell = NULL;
 static struct zwlr_screencopy_manager_v1 *screencopy_manager = NULL;
+static struct hyprland_global_shortcuts_manager_v1 *shortcuts_manager = NULL;
 
 static struct wl_surface *surface = NULL;
 static struct wl_buffer* buffer = NULL;
@@ -65,6 +74,7 @@ typedef struct {
 } Rect;
 
 #define TESSERACT_INTERVAL 1.0
+#define STATS_TO_USE STATS_ALL
 //#define DEBUG_MODE
 
 // TODO: Compute these based on screen size and ui scale
@@ -288,6 +298,8 @@ static void handle_global(void *data, struct wl_registry *registry, uint32_t nam
         layer_shell = wl_registry_bind(registry, name, &zwlr_layer_shell_v1_interface, version);
     } else if (strcmp(interface, zwlr_screencopy_manager_v1_interface.name) == 0) {
         screencopy_manager = wl_registry_bind(registry, name, &zwlr_screencopy_manager_v1_interface, version);
+    } else if (strcmp(interface, hyprland_global_shortcuts_manager_v1_interface.name) == 0) {
+        shortcuts_manager = wl_registry_bind(registry, name, &hyprland_global_shortcuts_manager_v1_interface, version);
     }
 }
 
@@ -364,7 +376,7 @@ void draw() {
             RString item = get_item(tesseract_texts[i]);
             
             if (item) {
-                float avg_price = get_item_price(item);
+                float avg_price = get_item_price(item, STATS_TO_USE);
                 if (avg_price < 0.0) {
                     continue;
                 }
@@ -372,7 +384,7 @@ void draw() {
                 olivec_text(oc, item, 0, ((OLIVEC_DEFAULT_FONT_HEIGHT * 3) + 5) * i, olivec_default_font, 3, 0xffffffff);
                 
                 olivec_sprite_copy(oc, r.x, r.y, r.h, r.h, plat);
-                float set_price = get_set_price(item);
+                float set_price = get_set_price(item, STATS_TO_USE);
                 sprintf(text, "%.2f", set_price);
                 olivec_text(oc, text, r.x + r.h + 5, r.y - (r.h / 2), olivec_default_font, 3, 0xffffffff);
                 
@@ -408,6 +420,20 @@ static const struct wl_callback_listener frame_listener = {
     .done = frame_callback
 };
 
+void shortcut_released(void *data, struct hyprland_global_shortcut_v1 *shortcut, uint32_t tv_sec_hi, uint32_t tv_sec_lo, uint32_t tv_nsec) {
+    (void)data;
+    (void)shortcut;
+    (void)tv_sec_hi;
+    (void)tv_sec_lo;
+    (void)tv_nsec;
+    printf("Shortcut pressed\n");
+}
+
+static const struct hyprland_global_shortcut_v1_listener shortcut_listener = {
+    .pressed = noop,
+    .released = shortcut_released
+};
+
 int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
@@ -432,6 +458,13 @@ int main(int argc, char *argv[]) {
     if (shm == NULL || compositor == NULL || layer_shell == NULL || screencopy_manager == NULL) {
         fprintf(stderr, "no wl_shm, wl_compositor, wlr_layer_shell or wlr_screencopy_manager support\n");
         return 1;
+    }
+
+    if (shortcuts_manager) {
+        struct hyprland_global_shortcut_v1* shortcut = hyprland_global_shortcuts_manager_v1_register_shortcut(shortcuts_manager, "test", "simple_warframe_overlay", "Testing shorcut", "Press it to activate");
+        hyprland_global_shortcut_v1_add_listener(shortcut, &shortcut_listener, NULL);
+    } else {
+        printf("Hyprland global shortcuts manager not found\n");
     }
 
     surface = wl_compositor_create_surface(compositor);

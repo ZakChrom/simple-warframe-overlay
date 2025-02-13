@@ -34,6 +34,13 @@ protocols/wlr-screencopy.h: protocols/wlr-screencopy-unstable-v1.xml
 protocols/wlr-screencopy.c: protocols/wlr-screencopy-unstable-v1.xml
 	$(SCANNER) private-code protocols/wlr-screencopy-unstable-v1.xml protocols/wlr-screencopy.c
 
+protocols/hyprland-global-shortcuts-v1.xml:
+	wget -nv -O protocols/hyprland-global-shortcuts-v1.xml https://raw.githubusercontent.com/hyprwm/hyprland-protocols/refs/heads/main/protocols/hyprland-global-shortcuts-v1.xml
+protocols/hyprland-global-shortcuts.h: protocols/hyprland-global-shortcuts-v1.xml
+	$(SCANNER) client-header protocols/hyprland-global-shortcuts-v1.xml protocols/hyprland-global-shortcuts.h
+protocols/hyprland-global-shortcuts.c: protocols/hyprland-global-shortcuts-v1.xml
+	$(SCANNER) private-code protocols/hyprland-global-shortcuts-v1.xml protocols/hyprland-global-shortcuts.c
+
 protocols:
 	mkdir -p protocols
 
@@ -53,8 +60,9 @@ rust/target/release/libjson.a: rust/src/lib.rs
 main: protocols assets main.c olive.c stb_image.h rust/target/release/libjson.a \
 	protocols/xdg-shell.h protocols/xdg-shell.c\
 	protocols/wlr-layer-shell.h protocols/wlr-layer-shell.c\
-	protocols/wlr-screencopy.h protocols/wlr-screencopy.c
-	$(CC) main.c protocols/xdg-shell.c protocols/wlr-layer-shell.c protocols/wlr-screencopy.c\
+	protocols/wlr-screencopy.h protocols/wlr-screencopy.c\
+	protocols/hyprland-global-shortcuts.h protocols/hyprland-global-shortcuts.c
+	$(CC) main.c protocols/xdg-shell.c protocols/wlr-layer-shell.c protocols/wlr-screencopy.c protocols/hyprland-global-shortcuts.c\
 		-Wall -Wextra -Wno-unused-variable -Wno-missing-braces\
 		-lwayland-client -lm -ltesseract -lleptonica -lssl -lcrypto rust/target/release/libjson.a \
 		-ggdb $(OPTIMIZE_FLAGS) -o $(OUT)

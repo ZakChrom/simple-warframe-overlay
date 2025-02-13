@@ -167,17 +167,28 @@ fn fetch_and_cache(url: String, cache_name: String) -> String {
     }
 }
 
-unsafe fn get_item_stuff(item: String) -> (f32, f32) {
+unsafe fn get_item_stuff(item: String, thing: u8) -> (f32, f32) {
     let text = fetch_and_cache(format!("https://api.warframe.market/v1/items/{}/statistics", item), item.clone());
-    std::fs::create_dir_all("cache").unwrap();
 
     let stats = serde_json::from_str::<Stats>(&text).unwrap();
 
+    let mut stuff: Vec<&StatsOrder> = vec![];
+    if thing & 0b0001 != 0 {
+        stuff.extend(&stats.payload.statistics_closed.hours_48);
+    }
+    if thing & 0b0010 != 0 {
+        stuff.extend(&stats.payload.statistics_live.hours_48);
+    }
+    if thing & 0b0100 != 0 {
+        stuff.extend(&stats.payload.statistics_closed.days_90);
+    }
+    if thing & 0b1000 != 0 {
+        stuff.extend(&stats.payload.statistics_live.days_90);
+    }
+
     let mut results = (0.0, 0.0);
-    for list in [stats.payload.statistics_closed.hours_48, stats.payload.statistics_live.hours_48, stats.payload.statistics_closed.days_90, stats.payload.statistics_live.days_90] {
-        for order in list {
-            results = (results.0 + order.avg_price, results.1 + 1.0);
-        }
+    for order in stuff {
+        results = (results.0 + order.avg_price, results.1 + 1.0);
     }
 
     (results.0, results.1)
@@ -197,8 +208,6 @@ pub unsafe extern "C" fn init_thingy() {
     // Will make get_min_str of forma return forma_blueprint which we can check to ignore forma
     // I could do lev of it every time we try to fetch an item but that wouldnt be cached and i want to do this
     ITEMS.push(("Forma Blueprint".to_string(), "forma_blueprint".to_string()));
-
-    println!("{:?}", get_min_str("forma blueprint".to_string()));
 }
 
 #[no_mangle]
@@ -219,7 +228,7 @@ pub unsafe extern "C" fn free_rstring(item: *mut c_char) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_set_price(item: *mut c_char) -> f32 {
+pub unsafe extern "C" fn get_set_price(item: *mut c_char, thing: u8) -> f32 {
     let item = CStr::from_ptr(item).to_str().unwrap().to_string();
     if item == "forma_blueprint" { return -1.0; }
 
@@ -247,13 +256,13 @@ pub unsafe extern "C" fn get_set_price(item: *mut c_char) -> f32 {
     // Maybe some item doesnt have a set so it wouldnt be put into the cache and would crash elsewhere or keep trying to get the set
     assert!(set != "", "{} does not have set", item);
 
-    let results = get_item_stuff(set.clone());
+    let results = get_item_stuff(set.clone(), thing);
     avg_cache.insert(set, results.0 / results.1);
     (results.0 / results.1)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn get_item_price(item: *mut c_char) -> f32 {
+pub unsafe extern "C" fn get_item_price(item: *mut c_char, thing: u8) -> f32 {
     let item = CStr::from_ptr(item).to_str().unwrap().to_string();
     if item == "forma_blueprint" { return -1.0; }
 
@@ -264,7 +273,7 @@ pub unsafe extern "C" fn get_item_price(item: *mut c_char) -> f32 {
         return *avg;
     }
 
-    let results = get_item_stuff(item.clone());
+    let results = get_item_stuff(item.clone(), thing);
     avg_cache.insert(item, results.0 / results.1);
     results.0 / results.1
 }
