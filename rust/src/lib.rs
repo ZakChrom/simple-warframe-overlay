@@ -277,3 +277,19 @@ pub unsafe extern "C" fn get_item_price(item: *mut c_char, thing: u8) -> f32 {
     avg_cache.insert(item, results.0 / results.1);
     results.0 / results.1
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn print_debug_stuff() {
+    if DIST_CACHE == None { DIST_CACHE = Some(HashMap::new()); }
+    if SET_CACHE == None { SET_CACHE = Some(HashMap::new()); }
+    if AVG_CACHE == None { AVG_CACHE = Some(HashMap::new()); }
+
+    let dist_cache = (&*addr_of!(DIST_CACHE)).as_ref().unwrap();
+    let set_cache = (&*addr_of!(SET_CACHE)).as_ref().unwrap();
+    let avg_cache = (&*addr_of!(AVG_CACHE)).as_ref().unwrap();
+    let items = &*addr_of!(ITEMS);
+    println!("Num items (prime components): {}", items.len());
+    println!("Dist cache: {}", dist_cache.len());
+    println!("Set cache: {}", set_cache.len());
+    println!("Avg cache: {}", avg_cache.len());
+}

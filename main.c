@@ -38,6 +38,7 @@ extern RString get_item(const char*);
 extern float get_item_price(RString, Stats);
 extern float get_set_price(RString, Stats);
 extern void free_rstring(RString);
+extern void print_debug_stuff();
 
 static uint32_t WIDTH = 0;
 static uint32_t HEIGHT = 0;
@@ -426,7 +427,7 @@ void shortcut_released(void *data, struct hyprland_global_shortcut_v1 *shortcut,
     (void)tv_sec_hi;
     (void)tv_sec_lo;
     (void)tv_nsec;
-    printf("Shortcut pressed\n");
+    print_debug_stuff();
 }
 
 static const struct hyprland_global_shortcut_v1_listener shortcut_listener = {
@@ -461,7 +462,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (shortcuts_manager) {
-        struct hyprland_global_shortcut_v1* shortcut = hyprland_global_shortcuts_manager_v1_register_shortcut(shortcuts_manager, "test", "simple_warframe_overlay", "Testing shorcut", "Press it to activate");
+        struct hyprland_global_shortcut_v1* shortcut = hyprland_global_shortcuts_manager_v1_register_shortcut(shortcuts_manager, "debug", "simple_warframe_overlay", "Print some debug info", "Press it to activate");
         hyprland_global_shortcut_v1_add_listener(shortcut, &shortcut_listener, NULL);
     } else {
         printf("Hyprland global shortcuts manager not found\n");
