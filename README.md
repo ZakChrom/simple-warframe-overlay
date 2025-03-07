@@ -1,9 +1,11 @@
 # SWO (Simple Warframe Overlay)
-### ⚠️ I AM NOT RESPONSIBLE FOR ANY BANNED ACCOUNTS. USE AT YOUR OWN RISK ⚠️
-### The overlay does not modify or interact with the game in any way other than screenshotting the screen to get relic info
+
+## Disclaimer
+#### This software is not affiliated with Digital Extremes. Use at your own risk. I am not responsible for any bans or penalties imposed
+#### The overlay does not modify or interact with the game in any way other than screenshotting the screen to get relic info. You should be fine but idk
 
 ## Not really simple if it has rust
-### Its not supposed to have rust but i couldnt be bothered to do json and networking in c so i will temporarly use rust
+#### Its not supposed to have rust but i couldnt be bothered to do json and networking in c so i will temporarly use rust
 
 ## Why another overlay? Isnt alecaframe better and less risky to use?
 #### Yes but its terrible to install on linux.
